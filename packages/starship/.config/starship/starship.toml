@@ -1,0 +1,116 @@
+# -----------------------------
+# Core prompt
+# -----------------------------
+
+format = """\
+$directory\
+$git_branch\
+$git_status\
+$nodejs\
+$python\
+$rust\
+$golang\
+$lua\
+$java\
+$dotnet\
+$php\
+$ruby\
+$swift\
+$zig\
+$c\
+$cpp\
+$cmd_duration\
+$character
+"""
+
+add_newline = false
+
+# -----------------------------
+# Directory
+# -----------------------------
+
+[directory]
+style = "cyan"
+truncation_length = 3
+truncate_to_repo = true
+
+# -----------------------------
+# Git
+# -----------------------------
+
+[git_branch]
+symbol = ""
+style = "purple"
+
+[git_status]
+style = "yellow"
+format = " [$all_status$ahead_behind]($style)"
+
+[nodejs]
+symbol = ""
+format = "[$symbol ](bold blue)"
+
+[python]
+symbol = ""
+format = "[$symbol ](bold yellow)"
+
+[rust]
+symbol = ""
+format = "[$symbol ](bold)"
+
+[golang]
+symbol = ""
+format = "[$symbol ](bold blue)"
+
+[lua]
+symbol = ""
+format = "[$symbol ](bold blue)"
+
+[java]
+symbol = ""
+format = "[$symbol ](bold red)"
+
+[dotnet]
+symbol = "󰪮"
+format = "[$symbol ](bold blue)"
+
+[php]
+symbol = ""
+format = "[$symbol ](bold blue)"
+
+[ruby]
+symbol = ""
+format = "[$symbol ](bold red)"
+
+[swift]
+symbol = ""
+format = "[$symbol ](bold red)"
+
+[zig]
+symbol = ""
+format = "[$symbol ](bold yellow)"
+
+[c]
+symbol = ""
+format = "[$symbol ](bold blue)"
+
+[cpp]
+symbol = ""
+format = "[$symbol ](bold blue)"
+# -----------------------------
+# Timing (only when slow)
+# -----------------------------
+
+[cmd_duration]
+min_time = 500
+format = " [$duration](dimmed white)"
+
+# -----------------------------
+# Prompt character
+# -----------------------------
+
+[character]
+success_symbol = "❯"
+error_symbol = "❯"
+# style_success = "white"
+# style_error = "red"

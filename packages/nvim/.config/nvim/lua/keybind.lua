@@ -26,11 +26,10 @@ keymap('n', '<leader>q', diagnostic.setloclist, opts("Set Location List with Dia
 
 local lsp = vim.lsp.buf
 -- See `:help vim.lsp.*` for documentation on any of the below functions
-keymap('n', 'gD', lsp.declaration, opts())
-keymap('n', 'gd', lsp.definition, opts())
-keymap('n', 'gi', lsp.implementation, opts())
-keymap('n', 'gr', lsp.references, opts())
-
+keymap('n', 'gD', lsp.declaration, opts("go to declaration"))
+keymap('n', 'gd', lsp.definition, opts("go to definition"))
+keymap('n', 'gi', lsp.implementation, opts("go to implementations"))
+keymap('n', 'gr', lsp.references, opts("go to references"))
 keymap('n', 'gt', lsp.type_definition, opts("go to type definition"))
 
 keymap('n', 'K', lsp.hover, opts("Show hover documentation"))
@@ -42,7 +41,8 @@ keymap('n', '<leader>wl', function()
 end, opts("List Workspace Folder"))
 
 
-keymap('n', '<leader>ca', lsp.code_action, opts("select code action"))
+keymap({ 'n', 'v' }, '<leader>ca', lsp.code_action, opts("select code action"))
+keymap('n', '<leader>cl', vim.lsp.codelens.run, opts("select code lens"))
 keymap('n', '<leader>rn', lsp.rename, opts("rename symbol"))
 -- keymap('n', '<leader>cf', lsp.format, opts("format"))
 

@@ -35,7 +35,20 @@ return {
         end,
 
       },
-      gopls = {},
+      gopls = {
+        settings = {
+          codelenses = {
+            test = true,
+          }
+        }
+      },
+      clangd = {
+        cmd = {
+          "clangd",
+          "--background-index",
+          "--query-driver=" .. vim.fn.expand("~") .. "/.arduino15/packages/esp32/tools/esp-x32/*/bin/xtensa-esp32s3-elf-*",
+        }
+      },
       vtsls = {
         settings = {
           complete_function_calls = true,
@@ -64,7 +77,23 @@ return {
             },
           },
         }
-
+      },
+      jdtls = {
+        settings = {
+          java = {
+            import = {
+              gradle = {
+                enabled = true,
+                wrapper = {
+                  enabled = true,
+                },
+              },
+            },
+            configuration = {
+              updateBuildConfiguration = "automatic",
+            },
+          },
+        },
       },
       ruff = {
         init_options = {
@@ -103,32 +132,37 @@ return {
     },
     config = function(_, opts)
       for lsp_name, config in pairs(opts) do
-        vim.lsp.config[lsp_name] = config
+        vim.lsp.config(lsp_name, config)
       end
-
-      local function get_quarto_resource_path()
-        local function strsplit(s, delimiter)
-          local result = {}
-          for match in (s .. delimiter):gmatch('(.-)' .. delimiter) do
-            table.insert(result, match)
-          end
-          return result
-        end
-
-        local f = assert(io.popen('quarto --paths', 'r'))
-        local s = assert(f:read '*a')
-        f:close()
-        return strsplit(s, '\n')[2]
-      end
-      local lua_library_files = vim.api.nvim_get_runtime_file('', true)
-      local lua_plugin_paths = {}
-      local resource_path = get_quarto_resource_path()
-      if resource_path == nil then
-        vim.notify_once 'quarto not found, lua library files not loaded'
-      else
-        table.insert(lua_library_files, resource_path .. '/lua-types')
-        table.insert(lua_plugin_paths, resource_path .. '/lua-plugin/plugin.lua')
-      end
+      vim.lsp.enable(vim.tbl_keys(opts))
+      -- vim.api.nvim_create_autocmd({ "CursorHold", "InsertLeave" }, {
+      --   callback = function()
+      vim.lsp.codelens.enable()
+      --   end,
+      -- })
+      -- local function get_quarto_resource_path()
+      --   local function strsplit(s, delimiter)
+      --     local result = {}
+      --     for match in (s .. delimiter):gmatch('(.-)' .. delimiter) do
+      --       table.insert(result, match)
+      --     end
+      --     return result
+      --   end
+      --
+      --   local f = assert(io.popen('quarto --paths', 'r'))
+      --   local s = assert(f:read '*a')
+      --   f:close()
+      --   return strsplit(s, '\n')[2]
+      -- end
+      -- local lua_library_files = vim.api.nvim_get_runtime_file('', true)
+      -- local lua_plugin_paths = {}
+      -- local resource_path = get_quarto_resource_path()
+      -- if resource_path == nil then
+      --   vim.notify_once 'quarto not found, lua library files not loaded'
+      -- else
+      --   table.insert(lua_library_files, resource_path .. '/lua-types')
+      --   table.insert(lua_plugin_paths, resource_path .. '/lua-plugin/plugin.lua')
+      -- end
 
 
 

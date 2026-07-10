@@ -32,14 +32,17 @@ return {
   -- optional for icon support
   dependencies = { "nvim-tree/nvim-web-devicons" },
   keys = {
-    { '<leader>ff', "<cmd>FzfLua files<cr>",     "Find File" },
-    { '<leader>fg', "<cmd>FzfLua live_grep<cr>", "Find Grep" },
-    { '<leader>fc', "<cmd>FzfLua commands<cr>",  "Find Commands" },
-    { '<leader>fq', "<cmd>FzfLua quickfix<cr>",  "Find Quickfix" },
-    { '<leader>fb', "<cmd>FzfLua buffers<cr>",   "Find Buffers" },
-    { '<leader>fh', "<cmd>FzfLua help_tags<cr>", "Find Help Tags" },
-    { '<leader>fd', diagnostics_with_toggle,     "Find Diagnostics" },
-    { '<leader>ft', "<cmd>FzfLua builtin<cr>",   "Find Pickers" },
+    { '<leader>ff', "<cmd>FzfLua files<cr>",                      "Find File" },
+    { '<leader>fg', "<cmd>FzfLua live_grep<cr>",                  "Find Grep" },
+    { '<leader>fc', "<cmd>FzfLua commands<cr>",                   "Find Commands" },
+    { '<leader>fq', "<cmd>FzfLua quickfix<cr>",                   "Find Quickfix" },
+    { '<leader>fb', "<cmd>FzfLua buffers<cr>",                    "Find Buffers" },
+    { '<leader>fh', "<cmd>FzfLua help_tags<cr>",                  "Find Help Tags" },
+    { '<leader>fd', diagnostics_with_toggle,                      "Find Diagnostics" },
+    { '<leader>ft', "<cmd>FzfLua builtin<cr>",                    "Find Pickers" },
+    { '<leader>fl', "<cmd>FzfLua lsp_live_workspace_symbols<cr>", "Find Lsp symbols" },
+    { 'gd',         "<cmd>FzfLua lsp_definitions<cr>",            "Find Lsp symbols" },
+    { 'gr',         "<cmd>FzfLua lsp_references<cr>",             "Find Lsp symbols" },
     { '<leader>fp',
       function()
         require("fzf-lua").files({
@@ -121,7 +124,7 @@ return {
       prompt = "Keymaps> ",
       ignore_patters = false,
 
-    }
+    },
   },
   config = function(_, opts)
     require("fzf-lua").setup(opts)
@@ -131,5 +134,6 @@ return {
         vim.keymap.set("t", "jk", "<Nop>", { buffer = ev.buf, silent = true, desc = "Disable jk in FzfLua" })
       end
     })
+    require("fzf-lua").register_ui_select()
   end,
 }

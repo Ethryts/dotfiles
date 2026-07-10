@@ -1,0 +1,7 @@
+stow
+nvim
+rg
+fd|fdfind
+bat|batcat
+fzf
+jq

@@ -1,0 +1,7 @@
+# Bail if non-interactive
+[[ $- != *i* ]] && return
+
+# Source all modules in order
+for f in "$HOME/.config/bash/conf.d/"*.sh; do
+  [ -r "$f" ] && . "$f"
+done
