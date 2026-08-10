@@ -3,6 +3,9 @@ return {
     'MeanderingProgrammer/render-markdown.nvim',
     enabled = true,
     dependencies = { 'nvim-treesitter/nvim-treesitter', 'echasnovski/mini.nvim' }, -- if you use the mini.nvim suite
+    build = function()
+      vim.fn["mkdp#util#install"]()
+    end,
     ---@module 'render-markdown'
     ---@type render.md.UserConfig
     opts = {
@@ -36,13 +39,13 @@ return {
     end,
     config = function()
       vim.cmd([[
-            function OpenMarkdownPreview (url)
-                " execute "silent ! start chrome --app=" . a:url
-                " execute "silent !  chrome --app=" . a:url
-                execute "silent ! open -a chrome.exe -n --args --new-window " . a:url
-            endfunction
-            let g:mkdp_browserfunc = 'OpenMarkdownPreview'
-            ]])
+            " function OpenMarkdownPreview (url)
+            "     " execute "silent ! start chrome --app=" . a:url
+            "     " execute "silent !  chrome --app=" . a:url
+            "     execute "silent ! open -a chrome.exe -n --args --new-window " . a:url
+            " endfunction
+            " let g:mkdp_browserfunc = 'OpenMarkdownPreview'
+            " ]])
     end,
     ft = { "markdown" },
   },

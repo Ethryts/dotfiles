@@ -67,18 +67,18 @@ return {
         },
         glyph = {},
         -- fzf = {},
-        ["ui-select"] = {
-          require("telescope.themes").get_dropdown({
-            borderchars = {
-              { "─", "│", "─", "│", "┌", "┐", "┘", "└" },
-              prompt = { "─", "│", " ", "│", "┌", "┐", "│", "│" },
-              results = { "─", "│", "─", "│", "├", "┤", "┘", "└" },
-              preview = { "─", "│", "─", "│", "┌", "┐", "┘", "└" },
-            },
-
-          })
-          -- layout_strategy = "cursor"
-        },
+        -- ["ui-select"] = {
+        --   require("telescope.themes").get_dropdown({
+        --     borderchars = {
+        --       { "─", "│", "─", "│", "┌", "┐", "┘", "└" },
+        --       prompt = { "─", "│", " ", "│", "┌", "┐", "│", "│" },
+        --       results = { "─", "│", "─", "│", "├", "┤", "┘", "└" },
+        --       preview = { "─", "│", "─", "│", "┌", "┐", "┘", "└" },
+        --     },
+        --
+        --   })
+        --   -- layout_strategy = "cursor"
+        -- },
         picker_list = {},
       },
     },

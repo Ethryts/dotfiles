@@ -1,0 +1,46 @@
+==============================================================================
+------------------------------------------------------------------------------
+                                                       *MdAssist.toggle()*
+                           `MdAssist.toggle`()
+Toggle the plugin by calling the `enable`/`disable` methods respectively.
+
+------------------------------------------------------------------------------
+                                                       *MdAssist.enable()*
+                        `MdAssist.enable`({scope})
+Initializes the plugin, sets event listeners and internal state.
+
+------------------------------------------------------------------------------
+                                                      *MdAssist.disable()*
+                           `MdAssist.disable`()
+Disables the plugin, clear highlight groups and autocmds, closes side buffers and resets the internal state.
+
+
+==============================================================================
+------------------------------------------------------------------------------
+                                                        *MdAssist.options*
+                            `MdAssist.options`
+MdAssist configuration with its default values.
+
+Type ~
+`(table)`
+Default values:
+>lua
+  MdAssist.options = {
+      -- Prints useful logs about what event are triggered, and reasons actions are executed.
+      debug = false,
+  }
+
+<
+------------------------------------------------------------------------------
+                                                        *MdAssist.setup()*
+                       `MdAssist.setup`({options})
+Define your mdassist setup.
+
+Parameters ~
+{options} `(table)` Module config table. See |MdAssist.options|.
+
+Usage ~
+`require("mdassist").setup()` (add `{}` with your |MdAssist.options| table)
+
+
+ vim:tw=78:ts=8:noet:ft=help:norl:

@@ -8,7 +8,9 @@ if ! command -v fd >/dev/null 2>&1 && command -v fdfind >/dev/null 2>&1; then
 fi
 
 # Using function instead to ensure that the arguments are passed correctly
-open() {
-    xdg-open "$@" >/dev/null 2>&1 &
-}
+if ! command -v open >/dev/null 2>&1; then
+  open() {
+      xdg-open "$@" >/dev/null 2>&1 &
+  }
+fi
 

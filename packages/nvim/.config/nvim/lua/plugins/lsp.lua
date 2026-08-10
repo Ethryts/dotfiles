@@ -46,7 +46,8 @@ return {
         cmd = {
           "clangd",
           "--background-index",
-          "--query-driver=" .. vim.fn.expand("~") .. "/.arduino15/packages/esp32/tools/esp-x32/*/bin/xtensa-esp32s3-elf-*",
+          "--query-driver=" ..
+          vim.fn.expand("~") .. "/.arduino15/packages/esp32/tools/esp-x32/*/bin/xtensa-esp32s3-elf-*",
         }
       },
       vtsls = {
@@ -99,24 +100,29 @@ return {
         init_options = {
           settings = {
             lint = {
-              ignore = { "F405" }
-
-            }
-          }
-        }
+              -- ignore = { "F405" }, -- Prefer moving this to pyproject.toml for Cursor/VSCode alignment
+            },
+          },
+        },
+        on_attach = function(client, _bufnr)
+          -- Prevent Ruff from competing with Basedpyright for hover documentation
+          client.server_capabilities.hoverProvider = false
+        end,
       },
       basedpyright = {
         settings = {
           basedpyright = {
+            disableOrganizeImports = true, -- Fixed typo (was disableOrganizedImports)
             analysis = {
-
+              autoSearchPaths = true,
+              useLibraryCodeForTypes = true,
               diagnosticSeverityOverrides = {
                 -- reportWildcardImportFromLibrary = "None",
-                reportTypeCommentUsage = false,
-                reportUntypedNamedTuple = false,
-                reportExplicitAny = false,
-                reportAny = false,
-                reportUnusedCallResult = 'information',
+                -- reportTypeCommentUsage = false,
+                -- reportUntypedNamedTuple = false,
+                -- reportExplicitAny = false,
+                -- reportAny = false,
+                -- reportUnusedCallResult = 'information',
               },
               extraPaths = (function()
                 local success, lsp_env = pcall(require, "lsp_env")
@@ -124,10 +130,10 @@ return {
                   return lsp_env.python.extraPaths
                 end
                 return {}
-              end)()
-            }
-          }
-        }
+              end)(),
+            },
+          },
+        },
       },
     },
     config = function(_, opts)
