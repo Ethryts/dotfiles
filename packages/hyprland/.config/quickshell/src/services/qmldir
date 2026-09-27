@@ -1,0 +1,14 @@
+singleton ThemeService 1.0 ThemeService.qml
+singleton OverlayService 1.0 OverlayService.qml
+singleton PostureService 1.0 PostureService.qml
+CalendarMenuService 1.0 CalendarMenuService.qml
+LauncherMenuService 1.0 LauncherMenuService.qml
+NotificationService 1.0 NotificationService.qml
+TooltipService 1.0 TooltipService.qml
+QuickControlsService 1.0 QuickControlsService.qml
+NetworkService 1.0 NetworkService.qml
+AudioService 1.0 AudioService.qml
+BrightnessService 1.0 BrightnessService.qml
+PowerProfilesService 1.0 PowerProfilesService.qml
+TabletKeyboardService 1.0 TabletKeyboardService.qml
+HyprwhisperService 1.0 HyprwhisperService.qml
