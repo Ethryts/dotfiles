@@ -1,0 +1,292 @@
+*imageui.txt*                 Image-backed UI decorations for Neovim
+
+==============================================================================
+CONTENTS                                                        *imageui-contents*
+
+1. Introduction .............................................. |imageui-intro|
+2. Setup ...................................................... |imageui-setup|
+3. API ........................................................ |imageui-api|
+4. CodeLens ................................................... |imageui-codelens|
+5. Commands ................................................... |imageui-commands|
+6. Limitations ................................................ |imageui-limitations|
+
+==============================================================================
+1. INTRODUCTION                                                  *imageui-intro*
+
+imageui.nvim binds PNG overlays to extmarks, windows, the cursor, or global
+screen coordinates. It uses the same Kitty transport and capability probe as
+|vim.ui.img|, while pooling uploaded image assets separately from placements.
+Theme-aware text scenes are converted from SVG to PNG and tracked as the editor
+scrolls, resizes, or changes layout.
+
+ImageUI augments Neovim rather than replacing it. Native buffers and windows
+remain responsible for borders, focus, cursor, selection, scrolling, and input.
+ImageUI adds scaled text, larger glyphs, sub-cell spacing, and image detail.
+
+Requirements:
+
+- A Neovim build exposing |vim.ui.img| (currently 0.13/nightly).
+- A terminal implementing the Kitty graphics protocol.
+- resvg, inkscape, rsvg-convert, magick, or convert.
+- ImageMagick for partially cropped images.
+
+Inside tmux 3.3 or newer, enable Kitty escape passthrough: >tmux
+  set -g allow-passthrough on
+  set -g focus-events on
+<
+The default transport.tmux="auto" detects $TMUX and verifies the effective
+pane option. It translates Neovim cells through the pane origin, window
+viewport, and top status line, then wraps each projected cursor move and Kitty
+placement together. Warm placement moves from one frame share a bounded
+passthrough envelope; PNG chunks stay separate. "on" forces wrapping and "off" disables it. Run
+|:checkhealth imageui| after changing it.
+Detach and reattach existing tmux clients after enabling focus-events. ImageUI
+pauses hidden-pane writes and replays retained placements on focus return
+without re-uploading PNGs. Health also reports missing tmux synchronized-update
+support and prints the exact terminal-features setting for the active client.
+
+transport.safe_reposition="auto" enables delete-before-replace only in WezTerm.
+This avoids its current Kitty-placement renderer crash during TUI scrolling
+without discarding the uploaded image. "on" forces this safe path and "off"
+uses direct placement replacement.
+
+Run >
+  :checkhealth imageui
+  :ImageUI demo
+<
+
+==============================================================================
+2. SETUP                                                          *imageui-setup*
+
+With lazy.nvim: >lua
+  {
+    "yourname/imageui.nvim",
+    version = false,
+    opts = {
+      style = {
+        font_family = "JetBrainsMono Nerd Font",
+        cell_width = 9,
+        cell_height = 18,
+      },
+      integrations = {
+        codelens = { enabled = true, layout = "smart" },
+      },
+    },
+  }
+<
+
+See README.md for every configuration field. Neovim cannot discover the TUI's
+font family or cell dimensions, so configure these for accurate text matching.
+
+==============================================================================
+3. API                                                              *imageui-api*
+
+setup({opts})                                             *imageui.setup()*
+    Configure and optionally enable the plugin. Repeated calls safely tear down
+    the prior configuration first.
+
+create({spec})                                           *imageui.create()*
+    Create a logical widget and return its integer ID. Required fields:
+
+    anchor ~
+      { kind="buffer", buffer=0, row=0, col=0 }
+      { kind="window", window=0, row=0, col=0 }
+      { kind="cursor", window=0, row=0, col=0 }
+      { kind="screen", row=1, col=1 }
+
+    content ~
+      { kind="text", spans={{text="note", highlight="Comment"}} }
+      { kind="png", path="...", width_cells=2, height_cells=1 }
+      { kind="svg", source="<svg>...</svg>", width_cells=8,
+        height_cells=3 }
+      { kind="scene", root=require("imageui").scene.text({...}) }
+
+    A custom SVG source may instead be a function receiving resolved styles,
+    cell metrics, and render scale. Optional fallback(), on_render(), and
+    on_show(), on_hide(), and on_delete() callbacks observe graceful
+    degradation and asset lifecycle.
+
+    Buffer rows and columns are zero-based. Buffer columns are byte offsets.
+    Screen rows and columns are one-based, matching |vim.ui.img|.
+
+surface({spec})                                         *imageui.surface()*
+    Create a declarative, non-owning visual surface. The scene primitives are
+    scene.text(), row(), column(), stack(), box(), and spacer(). Fractional
+    layout is allowed inside the image, while final placement remains aligned
+    to whole grid cells.
+
+    Scene nodes with stable IDs can receive actions from spec.actions. Events
+    are click, activate, enter, hover, leave, focus, and blur. Callbacks remain
+    outside the cached visual asset. consume=false runs the action and then
+    preserves Neovim's original mouse behavior.
+
+    focus={order={...}, initial=..., wrap=...} controls explicit keyboard
+    focus. The returned handle supports focus(), focus_next(), focus_prev(),
+    activate(), update(), close(), focused(), and inspect(). ImageUI installs
+    no keyboard mappings for these methods.
+
+    host={kind="window", win=...} attaches at an existing window's content
+    origin. The native window continues to own its border, input, selection,
+    scrolling, and lifetime; closing the surface never closes the window.
+    host={kind="view"} is the default and projects buffer scenes separately in
+    each split.
+
+    appearance="inline"|"float"|"menu" and semantic roles resolve through
+    Neovim highlights. Backgrounds stay transparent unless explicitly enabled.
+    Mouse positions are grid cells, so visual sub-cell regions are rounded to
+    covering cell hitboxes. pointer="none" leaves a node visual-only.
+
+update({id}, {patch})                                    *imageui.update()*
+    Update a widget. Replacing content invalidates rendered assets; replacing
+    an anchor recreates its extmark.
+
+delete({id})                                             *imageui.delete()*
+    Delete a widget and release its screen placements. Warm rendered assets
+    remain in the bounded transport cache for reuse.
+
+clear({filter})                                           *imageui.clear()*
+    Delete all widgets, or widgets matching { tag=... } or { buffer=... }.
+
+refresh()                                               *imageui.refresh()*
+    Schedule a geometry reconciliation.
+
+invalidate_styles()                           *imageui.invalidate_styles()*
+    Force a full theme-aware asset rebuild. Normal redraws automatically
+    fingerprint effective per-window styles and invalidate changed assets.
+    Call this after standalone nvim_set_hl() or nvim_win_set_hl_ns() changes;
+    ColorScheme and window highlight-option changes invalidate automatically.
+
+reset_transport()                               *imageui.reset_transport()*
+    Clear ImageUI's private terminal asset pool and rebuild visible placements.
+    UI reattachment performs this recovery automatically.
+
+on_redraw({name}, {callback})                       *imageui.on_redraw()*
+    Subscribe an integration to coalesced Neovim window redraws. Returns an
+    unsubscribe function. Callbacks run outside the decoration-provider phase.
+
+supported({probe})                                    *imageui.supported()*
+    Check API availability. With probe=true, use the experimental protected
+    terminal capability probe when Neovim exposes it.
+
+hit_test({row}, {col})                                  *imageui.hit_test()*
+    Return the topmost widget at a one-based screen position.
+
+hit_target({row}, {col})                              *imageui.hit_target()*
+    Return a semantic surface/node target, owning split, visible rectangle,
+    and local cell. Transparent scene gaps return nil.
+
+dispatch({action}, {mouse})                             *imageui.dispatch()*
+    Dispatch an action such as "click" to a widget under the mouse.
+
+export({directory})                                       *imageui.export()*
+    Export widget source assets and cropped PNGs used by active views.
+
+==============================================================================
+4. CODELENS                                                    *imageui-codelens*
+
+The integration replaces Neovim's private full-row renderer while preserving
+the public |vim.lsp.codelens| interface. enable(), is_enabled(), get(), run(),
+refresh(), workspace/codeLens/refresh, and grx all share the lenses displayed
+by ImageUI. Original functions and enabled state are restored when unloaded.
+
+Layouts:
+
+smart       Use an existing blank row above a function, otherwise overlay.
+overlay     Draw small text in the upper portion of the function row.
+blank_line  Require a blank row, otherwise use right-aligned virtual text.
+
+For ordered collision-aware placement, set placement_order to any sequence of:
+
+above_blank  Use a visible blank buffer row; ignore visual-only decorations.
+above_clear  Image rectangle above must be clear; other text may share the row.
+overlay      Compose small image text into the function row.
+right        Use right-aligned virtual text without adding a row.
+native       Use virt_lines_above and reserve a visual row.
+hide         Do not display the lens.
+
+If image rendering fails, the next right, native, or hide entry is used. An
+explicit placement_order never falls back to an omitted mode. The older
+fallback option only applies when placement_order is unset.
+
+The right-side channel is configured independently: >lua
+  right = {
+    always = true,
+    anchor = "colorcolumn",  -- "window" or "colorcolumn"
+    side = "after",          -- "before" or "after"
+    distance = 2,
+  }
+<
+always keeps a normal-cell right label even when an image fits above or over
+the function. distance is the number of empty cells before the right window
+edge, or between the label and the first usable window-local 'colorcolumn'.
+side selects whether a colorcolumn label sits before the guide or starts in
+the non-code area after it. Each split is resolved independently. An unset or
+unusable colorcolumn falls back to the window edge.
+
+relayout_debounce (default 50ms) limits collision scans during continuous
+scrolling. Cursor-only movement does not reconcile buffer-anchored images.
+
+placement.scroll_debounce (default 32ms) frame-throttles continuous viewport
+movement. Repeated events cannot postpone a pending frame. placement.debounce
+still controls other changes.
+|:ImageUI inspect| reports actual PNG uploads and bytes under
+performance.transport.transmissions and transmitted_bytes. Placement-only
+control traffic reports logical operations plus send_calls, tmux_envelopes,
+control_batches, and coalesced_control_commands. performance.scheduler reports
+event-to-frame waiting separately from reconcile execution.
+
+This is subcell visual composition, not a half-height Neovim row. The PNG still
+occupies an integer one-cell rectangle. |vim.lsp.codelens.run()| and the default
+grx mapping execute the same cached lens from its function or displayed row.
+
+==============================================================================
+5. COMMANDS                                                      *imageui-commands*
+
+:ImageUI inspect                    Show current widget and renderer state.
+:ImageUI refresh                    Reconcile all placements.
+:ImageUI clear                      Delete all widgets.
+:ImageUI demo                       Toggle a small cursor-relative demo.
+:ImageUI reset                      Reset and rebuild terminal image assets.
+:ImageUI benchmark start [count]    Create a realistic performance fixture.
+:ImageUI benchmark report           Show traffic, memory, and latency deltas.
+:ImageUI benchmark stop             Report and remove the fixture.
+:ImageUI export [directory]         Export active render assets.
+:ImageUI enable|disable             Toggle the framework.
+:ImageUI codelens toggle            Toggle the CodeLens integration.
+:ImageUI codelens refresh           Refresh the current buffer.
+:ImageUI codelens run               Execute the lens at the cursor.
+:ImageUI health                     Run :checkhealth imageui.
+
+A count larger than the visible nonblank row count distributes benchmark
+widgets through the current buffer for cold-scroll and large-registry testing.
+
+==============================================================================
+6. LIMITATIONS                                                  *imageui-limitations*
+
+- |vim.ui.img| is experimental, PNG-only, and TUI/Kitty-protocol-specific.
+- External UIs are not supported. The pooled backend implements tmux Kitty
+  passthrough at the transport edge; the nvim_img compatibility backend does
+  not.
+- Multiple attached UIs cannot share one set of global screen coordinates.
+- Multiple tmux clients attached to one session may have different viewport
+  geometry; one Kitty placement cannot target every client independently.
+- WezTerm currently has an upstream crash when existing Kitty placements are
+  repeatedly replaced during TUI scrolling. safe_reposition="auto" selects the
+  delete-before-replace mitigation there while retaining uploaded assets.
+- Image z-index has no defined relationship with float z-index.
+- Conceal is ignored by |screenpos()| when calculating columns.
+- The pooled transport admits assets only within render.cache.max_entries and the
+  decoded-size estimate in render.cache.max_bytes. Continuously changing unique
+  images can cause eviction/retransmission, and terminals may retain data
+  referenced by scrollback. If active assets fill the budget, new images use
+  their fallback until capacity is released.
+- Terminal GPU/decoded-image memory cannot be measured from headless Neovim;
+  |:ImageUI benchmark report| measures Lua, Neovim RSS, and protocol traffic.
+- Existing Lua callbacks that captured the old codelens.run function before
+  ImageUI loaded cannot be rewritten; mappings that resolve vim.lsp.codelens.run
+  at invocation time use the compatibility facade.
+- Native floats should own interaction-heavy content; images are visual layers.
+- Image visuals may use sub-cell geometry, but Neovim mouse input has cell
+  precision. Pixel-accurate hit testing needs a terminal-specific adapter.
+
+vim:tw=78:ts=8:noet:ft=help:norl:

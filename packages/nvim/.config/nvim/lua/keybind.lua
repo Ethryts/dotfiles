@@ -26,11 +26,11 @@ keymap('n', '<leader>q', diagnostic.setloclist, opts("Set Location List with Dia
 
 local lsp = vim.lsp.buf
 -- See `:help vim.lsp.*` for documentation on any of the below functions
-keymap('n', 'gD', lsp.declaration, opts("go to declaration"))
-keymap('n', 'gd', lsp.definition, opts("go to definition"))
-keymap('n', 'gi', lsp.implementation, opts("go to implementations"))
-keymap('n', 'gr', lsp.references, opts("go to references"))
-keymap('n', 'gt', lsp.type_definition, opts("go to type definition"))
+-- keymap('n', 'gD', lsp.declaration, opts("go to declaration"))
+-- keymap('n', 'gd', lsp.definition, opts("go to definition"))
+-- keymap('n', 'gi', lsp.implementation, opts("go to implementations"))
+-- keymap('n', 'gr', lsp.references, opts("go to references"))
+-- keymap('n', 'gt', lsp.type_definition, opts("go to type definition"))
 
 keymap('n', 'K', lsp.hover, opts("Show hover documentation"))
 keymap('n', '<C-k>', lsp.signature_help, opts("Show signature help"))

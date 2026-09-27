@@ -1,0 +1,55 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  format:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: JohnnyMorganz/stylua-action@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          version: 2.5.2
+          args: --check .
+
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        version: [stable, nightly]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install image tools
+        run: sudo apt-get update && sudo apt-get install -y librsvg2-bin imagemagick
+      - name: Install Neovim
+        run: |
+          curl -fL --retry 3 \
+            -o /tmp/nvim.tar.gz \
+            "https://github.com/neovim/neovim/releases/download/${{ matrix.version }}/nvim-linux-x86_64.tar.gz"
+          mkdir -p /tmp/nvim
+          tar --no-same-owner -xzf /tmp/nvim.tar.gz -C /tmp/nvim --strip-components=1
+          echo "/tmp/nvim/bin" >> "$GITHUB_PATH"
+      - name: Test
+        run: scripts/test.sh
+      - name: Performance and transport stress tests
+        run: scripts/test-perf.sh
+      - name: Validate help tags
+        run: |
+          help_dir="$(mktemp -d)"
+          cp doc/imageui.txt "$help_dir/imageui.txt"
+          nvim --headless --clean -u NONE "+helptags $help_dir" "+qa"
+          test -s "$help_dir/tags"
+      - name: Verify experimental image API shape
+        if: matrix.version == 'nightly'
+        run: |
+          nvim --headless --clean -u NONE \
+            "+lua assert(vim.ui and vim.ui.img and vim.ui.img.set and vim.ui.img.get and vim.ui.img.del)" \
+            "+qa"

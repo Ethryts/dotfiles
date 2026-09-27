@@ -1,0 +1,439 @@
+*aligned-inline-diagnostic.txt*  Aligned inline diagnostic previews
+
+==============================================================================
+CONTENTS  *aligned-inline-diagnostic-contents*
+
+1. Introduction                         |aligned-inline-diagnostic|
+2. Setup                           |aligned-inline-diagnostic-setup|
+3. Alignment and previews       |aligned-inline-diagnostic-preview|
+4. Hover content                  |aligned-inline-diagnostic-hover|
+5. Timing and placement       |aligned-inline-diagnostic-placement|
+6. Appearance                 |aligned-inline-diagnostic-appearance|
+7. Recipes                       |aligned-inline-diagnostic-recipes|
+8. Commands                     |aligned-inline-diagnostic-commands|
+9. API                               |aligned-inline-diagnostic-api|
+10. Health and limitations       |aligned-inline-diagnostic-health|
+
+==============================================================================
+1. Introduction                                *aligned-inline-diagnostic*
+
+aligned-inline-diagnostic.nvim renders compact diagnostics beside code.
+Nearby diagnostics share a display column and, by default, a pill width and
+right-aligned count column. Resting on a diagnostic opens its full messages
+in a source-safe floating window without adding virtual lines.
+
+Requires Neovim 0.10 or newer.
+
+==============================================================================
+2. Setup                                  *aligned-inline-diagnostic-setup*
+
+>lua
+  require("aligned-inline-diagnostic").setup({
+    diagnostics = {
+      severity = nil,
+      sources = nil,
+      exclude_sources = {},
+      namespaces = nil,
+      filter = nil,
+      deduplicate = false,
+    },
+    alignment = {
+      mode = "block",
+      min_col = 36,
+      padding = 3,
+      include_range_width = true,
+      max_range_lines = 50,
+      max_gap = 4,
+      max_col = nil,
+    },
+    preview = {
+      max_width = 52,
+      width_mode = "block",
+      count_align = "right",
+      inactive = { enabled = true, scope = "block" },
+    },
+    hover = {
+      delay_ms = nil,
+      sticky = true,
+      input_mode = "both",
+      use_mouse = false, -- deprecated compatibility option
+      mouse_scope = "diagnostic",
+      cursor_scope = "line",
+      group_by = "line",
+      min_width = 30,
+      preferred_width = 54,
+      max_width = 72,
+      width_mode = "preferred",
+      match_preview_width = true,
+      placement = {
+        order = { "right", "below", "above" },
+        gap = 0,
+        edge_margin = 1,
+        avoid_source = true,
+        preserve_anchor = true,
+      },
+    },
+  })
+<
+
+README.md and config.lua contain the complete defaults. setup() can be called
+again safely; options are deep-merged with the defaults.
+
+==============================================================================
+3. Alignment and previews              *aligned-inline-diagnostic-preview*
+
+The alignment.mode values are:
+
+  block   Lines separated by at most alignment.max_gap clean lines share an
+          anchor. This is the default.
+  buffer  Every diagnostic in the buffer shares an anchor.
+  none    Each preview follows its own code plus alignment.padding.
+
+The anchor is at least alignment.min_col. alignment.max_col optionally caps
+the shared anchor. A code line past that cap still receives normal padding,
+so preview text does not overwrite buffer text.
+
+alignment.padding defaults to 3 explicit blank cells after Neovim's EOL cell.
+include_range_width defaults to true: multiline diagnostics reserve the width
+of their widest covered line when the range is at most max_range_lines, which
+defaults to 50. Larger ranges stay start-line based to bound render work. Set
+include_range_width=false for the earlier start-line-only behavior.
+
+preview.width_mode controls the pill body:
+
+  fit     Each preview hugs its own content.
+  block   The block uses its widest natural preview width. This is default.
+  fixed   Every preview uses preview.max_width.
+
+With hover.match_preview_width enabled, this selects the initial preview body
+width. Matching may then grow or shrink that body within the configured preview
+and hover limits.
+
+preview.max_width defaults to 52. preview.padding_left and
+preview.padding_right both default to 1. Long messages use preview.ellipsis,
+which defaults to "…".
+
+preview.show_count defaults to true, so additional same-line diagnostics are
+shown as "+N". preview.count_align is "right" by default, reserving the
+widest count slot in the block. "inline" puts the count immediately after the
+message. preview.count_format(extra, total) may return a replacement string.
+
+preview.format(diagnostic, context) may return a custom one-line message.
+context contains bufnr, row, diagnostics, count, and group_id. Newlines are
+collapsed. A formatter error is reported once and uses the provider message.
+
+While a float is open, other previews can use inactive styling.
+preview.inactive.enabled defaults to true and its scope defaults to "block".
+Use scope = "buffer" to dim every other preview in the buffer.
+
+Diagnostic filters~
+
+diagnostics.severity accepts an error/warn/info/hint name, Neovim severity
+number, or list. diagnostics.sources and namespaces are optional allow-lists;
+exclude_sources is a source deny-list. diagnostics.filter(diagnostic, bufnr)
+is the final predicate. Callback errors are reported once and fail open.
+
+diagnostics.deduplicate defaults to false. When true, entries with matching
+range, severity, source, code, and message are collapsed before rendering.
+
+==============================================================================
+4. Hover content                         *aligned-inline-diagnostic-hover*
+
+The default float is message-first. The severity glyph and message form the
+headline. Source and diagnostic code appear below as quieter metadata.
+
+  hover.message_first          true
+  hover.show_source            true
+  hover.show_code              true
+  hover.show_severity          false
+  hover.deduplicate_source     true
+  hover.metadata_position      "below"
+  hover.metadata_separator     " · "
+
+metadata_position accepts "below", "inline", or "hidden". Repeated source
+names are omitted within one float when deduplicate_source is enabled.
+
+Provider newlines are kept as structured child lines. Plugin-created wraps
+use a stable continuation lane. hover.wrap_mode defaults to "balanced",
+which rebalances the last two lines when it can avoid a short orphan. Use
+"greedy" for ordinary word wrapping. hover.item_spacing defaults to 0.
+
+hover.highlight_tokens defaults to true. Quoted strings, backticked names,
+and quoted identifiers in messages and details receive the FloatCode role.
+
+The severity glyphs default to:
+
+  error  ●       warning  ▲       information  ◆       hint  ○
+
+icons.branch, icons.continuation, icons.last, and icons.related default to
+├, │, ╰, and ↳. All glyphs are configurable.
+
+hover.show_related defaults to true and includes LSP relatedInformation.
+hover.details(diagnostic) can return a string or list of extra lines.
+
+hover.format_message(diagnostic, context) and
+hover.format_metadata(diagnostic, context) replace those roles completely.
+context contains index, count, show_source, bufnr, winid, row, layout_row,
+input, group_by, and target. A returned list is treated as provider-supplied
+lines and still uses the plugin's wrapping and highlights. Returning nil from
+an installed formatter suppresses that role. Errors use the built-in role.
+
+==============================================================================
+5. Timing and placement              *aligned-inline-diagnostic-placement*
+
+The plugin starts a target-aware timer on entry. hover.delay_ms = nil reads
+the current 'updatetime'; a number is a plugin-local delay in milliseconds.
+With hover.sticky enabled, movement within one diagnostic line or multiline
+range does not restart the timer or close an open float.
+
+hover.input_mode accepts "cursor", "mouse", or "both". The default is
+"both". Either enabled input can open or retain the same diagnostic without
+restarting its timer. hover.mouse_scope controls which part of a diagnostic
+keeps or opens the target:
+
+  diagnostic   Diagnosed source ranges or the rendered preview pill. Default.
+  code         Only diagnosed source ranges.
+  preview      Only the rendered preview pill.
+  line         Any cell on the diagnostic's screen line.
+
+hover.cursor_scope is "line" by default, so keyboard cursor movement anywhere
+on a diagnostic line can open the float. Set it to "diagnostic" to require the
+cursor to be inside the provider's exact diagnostic range.
+
+hover.group_by controls expanded content:
+
+  line         Diagnostics starting on the selected preview line. Default.
+  range        Only the exact diagnostic selected by cursor or mouse.
+  block        Every diagnostic in the selected aligned block.
+
+Moving the pointer over the open float preserves its target. A click passing
+through the non-focusable float cannot select a different diagnostic covered
+by it; normal cursor ownership resumes after the pointer leaves. The plugin
+temporarily enables 'mousemoveevent' and restores its prior value on disable.
+hover.use_mouse is retained for compatibility. When hover.input_mode is
+omitted, an explicitly configured true maps to "mouse" and false maps to
+"cursor". hover.input_mode takes precedence when both are supplied.
+
+The default placement order is { "right", "below", "above" }. "right"
+expands from the aligned preview anchor. With preserve_anchor enabled, it
+retains the preview's exact top-left cell and may shrink below min_width or
+truncate vertically before moving. If it still cannot fit without covering
+the visible diagnostic range, "below" and then "above" are tried. Those
+fallbacks overlay unrelated screen rows but never insert document lines.
+
+hover.placement.edge_margin defaults to 1, gap to 0, and avoid_source to true.
+preserve_anchor defaults to true; disable it to restore repositioning within
+the split. Set a shorter order to disable a fallback. row_offset and
+col_offset default to 0. The float remains within the current split.
+
+Scroll refreshes keep an open target's screen column and width while the split
+width is unchanged. This avoids narrowing when a mouse click over the surface
+moves the source cursor to end-of-line. Resizes and content/configuration
+refreshes still recompute the geometry.
+
+hover.match_preview_width defaults to true. It makes the persistent preview
+pill and expanded surface use the pill's rendered width when their configured
+limits allow it. The preview grows toward min_width without exceeding
+preview.max_width. Explicit limits remain authoritative: a compact preview or
+constrained screen can make the widths differ, and preserve_anchor prioritizes
+the left edge by permitting the float to shrink instead of jumping.
+Matching compares the preview to the float content grid. A non-none border adds
+cells outside that width; keep border = "none" for identical visible edges.
+
+Set match_preview_width = false to size the expanded surface independently.
+hover.width_mode then accepts:
+
+  fit        Fit content between min_width and max_width.
+  preferred  Request the stable preferred_width. This is the default.
+  fixed      Always request max_width.
+
+min_width, preferred_width, and max_width default to 30, 54, and 72.
+Available screen space may make the result narrower. max_height defaults to
+18; overflow ends with a summary line. Setup rejects a max_width too narrow
+for configured caps, padding, glyph lane, and minimal message content.
+
+hover.hide_preview and hover.dim_inactive both default to true. The first
+hides the preview replaced by the float; the second applies inactive styling
+to the configured preview scope. hover.highlight_target defaults to "all",
+highlighting every represented diagnostic range. "primary" highlights only
+the highest-priority diagnostic; false disables range highlighting.
+
+hover.cap_style defaults to "ends": only the first row has a left cap and
+only the last has a right cap. Intermediate edges are flat. "all" caps every
+row and "none" removes cap lanes. border defaults to "none" and left/right
+padding both default to 1.
+
+Pinned reading~
+
+:AlignedDiagnostic pin turns the current expansion into a focusable surface.
+It stops following cursor and mouse movement and retains all formatted lines
+in a scrollable scratch buffer; max_height still bounds the visible window.
+Press q to close, or <Esc> to unpin and return to the source window. Refreshes
+reuse the existing surface whenever possible to avoid a positional jump.
+
+==============================================================================
+6. Appearance                        *aligned-inline-diagnostic-appearance*
+
+Generated surfaces blend the editor background with a severity tint.
+appearance.preview_blend defaults to 0.14 and hover_blend to 0.12. A blend of
+0 is the editor background and 1 is the full tint.
+
+appearance.preview_tints and hover_tints map error, warn, info, and hint to
+their matching Diagnostic highlight groups by default. Each accepts a
+#RRGGBB color, integer color, or highlight-group name.
+
+preview_backgrounds and hover_backgrounds provide exact per-severity
+backgrounds. hover_tint supplies one shared generated tint;
+hover_background supplies one exact shared background. Per-severity exact
+hover backgrounds take priority over shared values.
+
+appearance.ensure_contrast defaults to true and chooses a readable foreground
+when the preferred one falls below minimum_contrast, which defaults to 3.0.
+metadata_blend defaults to 0.58, inactive_blend to 0.55, and active_blend to
+0.10. Set ensure_contrast to false when supplying every color yourself.
+
+Edge underlays~
+
+appearance.edge_underlay controls the cells surrounding preview and float
+surfaces. It applies to alignment padding, cap cells, and blank flat edge
+lanes. With combine enabled, preview cap groups omit their background so
+native highlights such as ColorColumn remain visible through extmark
+hl_mode=combine. Float edge lanes resolve a concrete background because a
+float is a separate grid.
+
+normal, colorcolumn, and overflow accept highlight names, #RRGGBB strings, or
+integer colours. overflow defaults to PastColorColumn. overflow_column = nil
+uses the greatest positive source-window 'colorcolumn'; set a number such as
+100 when another match or plugin shades the overflow region.
+
+resolve(context) may return "inherit", a region name, a highlight name, a
+colour, or nil. Context includes view, side, virtual_column, screen_column,
+severity, inactive, source_win, bufnr, and row information. Set combine=false
+to force configured preview backgrounds instead of native cell combination.
+
+Role highlights end in Error, Warn, Info, or Hint:
+
+  AlignedDiagnosticPreviewBody…       preview message surface
+  AlignedDiagnosticPreviewIcon…       preview severity glyph
+  AlignedDiagnosticPreviewCount…      preview count
+  AlignedDiagnosticCap…               active preview edge foreground
+  AlignedDiagnosticInactive{Body,Icon,Count,Cap}…
+                                      inactive preview roles
+  AlignedDiagnosticFloat{Body,Message,Metadata,Detail,Code,Cap}…
+                                      expanded float roles
+  AlignedDiagnosticHover…             float glyph lane
+  AlignedDiagnosticActiveRange…       diagnosed source range
+
+Generic role names without a severity suffix propagate to all four variants
+unless one is overridden explicitly. Legacy
+AlignedDiagnostic{Error,Warn,Info,Hint} overrides remain supported for active
+previews. String values in the highlights table are treated as highlight
+links. Highlight fg/bg/sp fields accept hex, integer, and named colors; use a
+string value or { link = "Group" } to link a whole role. Appearance and edge
+colour sources may additionally name highlight groups.
+
+==============================================================================
+7. Recipes                              *aligned-inline-diagnostic-recipes*
+
+Faster hover: >lua
+  hover = { delay_ms = 180, sticky = true }
+<
+
+Exact soft palette: >lua
+  appearance = {
+    hover_backgrounds = {
+      error = "#4b353d",
+      warn = "#4a4232",
+      info = "#334653",
+      hint = "#354a45",
+    },
+  }
+<
+
+Earlier metadata-first presentation: >lua
+  preview = {
+    width_mode = "fit",
+    count_align = "inline",
+    inactive = { enabled = false },
+  }
+  hover = {
+    match_preview_width = false,
+    width_mode = "fit",
+    message_first = false,
+    show_severity = true,
+    deduplicate_source = false,
+    wrap_mode = "greedy",
+    highlight_tokens = false,
+    dim_inactive = false,
+    highlight_target = false,
+    placement = { order = { "right" } },
+  }
+  icons = { error = "●", warn = "●", info = "●", hint = "●" }
+  appearance = { hover_blend = 0.16 }
+<
+
+==============================================================================
+8. Commands                              *aligned-inline-diagnostic-commands*
+
+:AlignedDiagnostic enable       Enable previews and hover.
+:AlignedDiagnostic disable      Clear previews and close hover.
+:AlignedDiagnostic toggle       Toggle the plugin.
+:AlignedDiagnostic refresh      Immediately redraw the current buffer.
+:AlignedDiagnostic open         Open details at the cursor.
+:AlignedDiagnostic close        Close the current detail float.
+:AlignedDiagnostic pin          Focus and retain complete hover content.
+:AlignedDiagnostic unpin        Return a pinned hover to passive mode.
+:AlignedDiagnostic enable-buffer
+                                Enable the current buffer.
+:AlignedDiagnostic disable-buffer
+                                Disable and clear the current buffer.
+:AlignedDiagnostic toggle-buffer
+                                Toggle the current buffer.
+
+==============================================================================
+9. API                                        *aligned-inline-diagnostic-api*
+
+>lua
+  local diagnostic = require("aligned-inline-diagnostic")
+  diagnostic.setup(options)
+  diagnostic.enable()
+  diagnostic.disable()
+  diagnostic.toggle()
+  diagnostic.refresh(bufnr)
+  diagnostic.open()
+  diagnostic.close()
+  diagnostic.pin()
+  diagnostic.unpin()
+  diagnostic.enable_buffer(bufnr)
+  diagnostic.disable_buffer(bufnr)
+  diagnostic.toggle_buffer(bufnr)
+  diagnostic.is_enabled(bufnr) -- omit bufnr for global state
+  diagnostic.get_diagnostics_under_cursor()
+  diagnostic.get_diagnostics_on_line()
+<
+
+get_diagnostics_under_cursor() uses the provider's exact ranges.
+get_diagnostics_on_line() retains the line-grouped query used by older
+versions.
+
+==============================================================================
+10. Health and limitations               *aligned-inline-diagnostic-health*
+
+Run: >vim
+  :checkhealth aligned-inline-diagnostic
+<
+
+The health check reports version support, setup and enable state, mouse-event
+support, palette background fallback, unusually wide caps, and buffers shown
+in more than one window.
+
+Diagnostic preview extmarks are buffer-global. If one buffer is displayed in
+multiple windows, it has one shared alignment layout and active/hidden/dimmed
+preview state. The plugin uses the current or first visible source window for
+window-local colorcolumn, scroll, and edge calculations. Match those window
+options or set appearance.edge_underlay.overflow_column for stable behavior.
+
+Concealment and inline virtual text owned by other plugins are not included in
+buffer-text width measurement.
+
+vim:tw=78:ts=8:noet:ft=help:norl:

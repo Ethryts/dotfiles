@@ -1,0 +1,6 @@
+.DS_Store
+luacov.*
+*.rock
+*.rockspec.lock
+nvim.log
+doc/tags

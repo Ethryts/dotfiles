@@ -1,0 +1,560 @@
+*review-comments.txt*       Durable, location-aware review notes for Neovim
+
+==============================================================================
+CONTENTS                                              *review-comments-contents*
+
+  1. Introduction...............................|review-comments-introduction|
+  2. Requirements................................|review-comments-requirements|
+  3. Setup..............................................|review-comments-setup|
+  4. Workflow and editor..............................|review-comments-editor|
+  5. Commands........................................|review-comments-commands|
+  6. Anchor recovery.................................|review-comments-anchors|
+  7. Git review sessions............................|review-comments-sessions|
+  8. Lists and DiffTool.............................|review-comments-difftool|
+  9. Persistence.....................................|review-comments-storage|
+ 10. Configuration.................................|review-comments-options|
+ 11. Lua API and events.................................|review-comments-api|
+ 12. Limitations................................|review-comments-limitations|
+
+==============================================================================
+1. INTRODUCTION                                    *review-comments-introduction*
+
+review-comments.nvim attaches durable feedback to code, keeps it synchronized
+while code moves, exposes it through native Neovim lists, and copies it into
+any external agent or CLI. It has no AI provider, transport, Git host, or
+prompt-format dependency.
+
+JSON is durable state. Extmarks and quickfix/location lists are live editor
+projections; their Neovim IDs are never persistent review IDs.
+
+==============================================================================
+2. REQUIREMENTS                                      *review-comments-requirements*
+
+  - Neovim 0.10 or newer
+  - Git
+  - A clipboard provider when using register "+" or "*"
+
+==============================================================================
+3. SETUP                                                      *review-comments-setup*
+
+LAZY.NVIM ~
+
+>lua
+  {
+    "yourname/review-comments.nvim",
+    main = "review_comments",
+    cmd = {
+      "ReviewComment", "ReviewEdit", "ReviewDelete",
+      "ReviewResolve", "ReviewReopen", "ReviewRelocate",
+      "ReviewCopy", "ReviewList", "ReviewStatus", "ReviewReload",
+      "ReviewStart", "ReviewDiff", "ReviewClear",
+      "ReviewNext", "ReviewPrevious", "ReviewJump", "ReviewListClose",
+    },
+    opts = {},
+  }
+<
+
+For a local checkout replace the repository string with: >lua
+
+  dir = vim.fn.expand("~/src/review-comments.nvim"),
+  name = "review-comments.nvim",
+<
+
+The explicit `main` is required because the module is `review_comments`.
+For manual setup, add the plugin to 'runtimepath' and call: >lua
+
+  require("review_comments").setup()
+<
+
+==============================================================================
+4. WORKFLOW AND EDITOR                                  *review-comments-editor*
+
+The usual workflow:
+
+  1. Select code and run |:ReviewComment|.
+  2. Write the note and use |:write| or CTRL-S.
+  3. Continue editing; an extmark follows the reviewed range.
+  4. Run |:ReviewList| when a navigable projection is useful.
+  5. Use |:ReviewCopy| and paste into any external tool.
+  6. Resolve/delete notes, or use |:ReviewClear| to archive the session.
+
+Characterwise Visual mode creates exact 0-based byte-column ranges. Linewise
+Visual mode tracks complete lines. Multiline character ranges work; blockwise
+selections are refused.
+
+Copied exact locations use `file:line:start-end`. Columns displayed to users
+are 1-based while the final value identifies the exclusive stored byte edge.
+
+Omitting text from |:ReviewComment| or |:ReviewEdit| opens a Markdown `acwrite`
+scratch buffer:
+
+  - |:write| or CTRL-S validates and saves the complete multiline note.
+  - |:ReviewCancel| cancels the editor; [!] also cancels a pending async save.
+  - |:quit| cancels an unmodified draft; after edits Neovim refuses it normally.
+    |:quit!| discards a modified draft. Neither leaves hidden editor state.
+  - Failed or concurrently stale edits remain open with their draft intact.
+
+The source range for a new note is captured when its editor opens. If that
+buffer changes before save, creation is refused instead of attaching to
+different code.
+
+                                                        *:ReviewCancel*
+:ReviewCancel[!]
+        Buffer-local to a review editor. Cancel the draft. Without [!], refuse
+        while an asynchronous submission is pending.
+
+==============================================================================
+5. COMMANDS                                                *review-comments-commands*
+
+                                                        *:ReviewComment*
+:[range]ReviewComment [text]
+        Attach feedback to [range]. Without [text], open the multiline editor.
+        Characterwise Visual selections retain exact byte geometry; other
+        ranges are linewise.
+
+                                                        *:ReviewEdit*
+:ReviewEdit [text]
+        Edit the selected comment. Without [text], open the multiline editor.
+
+                                                        *:ReviewDelete*
+:ReviewDelete[!] [id]
+        Delete the selected comment after confirmation. [!] skips confirmation.
+
+                                                        *:ReviewResolve*
+:ReviewResolve [id]
+        Mark the selected comment resolved. It keeps a subdued live extmark.
+
+                                                        *:ReviewReopen*
+:ReviewReopen [id]
+        Return a resolved comment to active status.
+
+                                                        *:ReviewRelocate*
+:[range]ReviewRelocate [id]
+        Confirm a candidate/orphan at [range], preserving its persistent ID,
+        creation time, original text, and original context. Visual character
+        ranges remain exact.
+
+                                                        *:ReviewCopy*
+:ReviewCopy[!]
+        Synchronize locations and copy active comments. [!] includes resolved
+        comments. See |review-comments-clipboard|.
+
+                                                        *:ReviewList*
+:ReviewList[!]
+        Open active comments in quickfix or a DiffTool-safe location list. [!]
+        includes resolved comments.
+
+                                                        *:ReviewStatus*
+:ReviewStatus
+        Report Git scope plus active, resolved, candidate, and orphan counts.
+
+                                                        *:ReviewReload*
+:ReviewReload[!]
+        Reload disk state. Without [!], refuse if local anchor changes are
+        pending. With [!], discard that pending state.
+
+                                                        *:ReviewStart*
+:ReviewStart[!] [base-ref]
+        Start a Git-scoped session using [base-ref], default HEAD. The ref is
+        frozen to a full commit ID. A non-empty current session requires [!],
+        which archives it atomically.
+
+                                                        *:ReviewDiff*
+:ReviewDiff
+        Emit `ReviewDiffRequested` and call `session.open_diff`, if configured,
+        for the current Git-scoped session.
+
+                                                        *:ReviewClear*
+:ReviewClear
+        Archive the current session, clear its marks/list, and start an empty
+        unscoped session under the same compare-and-swap lock.
+
+                                                        *:ReviewNext*
+:ReviewNext
+                                                        *:ReviewPrevious*
+:ReviewPrevious
+        Navigate the owned projection. DiffTool navigation validates its owner
+        pane, file, side, and snapshot identity before moving.
+
+                                                        *:ReviewJump*
+:ReviewJump
+        Jump from the selected review-list row after validating its source.
+
+                                                        *:ReviewListClose*
+:ReviewListClose
+        Close the owned review list. A quickfix projection restores preceding
+        history before closing.
+
+Without [id], lifecycle commands use the selected, strictly owned list row or
+the sole live comment under the source cursor. Select a list row or pass an ID
+when comments overlap.
+
+==============================================================================
+6. ANCHOR RECOVERY                                      *review-comments-anchors*
+
+The plugin stores immutable original text/context separately from last trusted
+current text/context. Extmarks track in-process edits. After files change while
+Neovim is closed, restoration uses this conservative order:
+
+  1. unchanged full-file fingerprint and stored exact range;
+  2. a globally unique exact-text match;
+  3. an exact duplicate with uniquely identifying context;
+  4. uniquely supported surrounding context for changed/expanded/contracted
+     text, retained as an untrusted candidate;
+  5. orphan if the location remains ambiguous or missing.
+
+The plugin does not choose by nearest-line distance. The last trusted text is
+never replaced by an unconfirmed context candidate.
+
+ANCHOR HEALTH ~
+
+  Healthy
+        Normal region highlight and `R` sign.
+
+  Candidate (`anchor.valid=true`, `anchor.stale=true`)
+        Warning region and `?` sign. It remains navigable, but list/export text
+        identifies it as a candidate. Confirm with |:ReviewRelocate|.
+
+  Orphan (`anchor.valid=false`)
+        `!` sign at the old row when that file is loaded. Quickfix rows omit
+        both filename and buffer target, so native navigation cannot open an
+        obsolete line. Confirm manually with |:ReviewRelocate|.
+
+An external rename is deferred while the old buffer contains unsaved work, so
+reconciliation cannot detach a note from manual edits.
+
+GIT-AWARE FILE MOVES ~
+
+Worktree anchors retain a Git tracking commit/path. When the stored path is
+missing, recovery first uses Git rename records from that commit. If needed it
+does a bounded search of current tracked and non-ignored untracked files. A
+destination must provide one safe exact/context match. Accepted path changes
+are recorded in anchor history. Broad recovery runs at explicit command/reload
+boundaries, not every |BufWinEnter|. Snapshot comments never use repository-wide
+move recovery.
+
+SOURCE IDENTITY ~
+
+  `{ kind = "worktree" }`
+        A normal buffer or DiffTool side backed by the actual worktree path.
+
+  `{ kind = "snapshot", side = "left"|"right", content_sha256 = "..." }`
+        An immutable or temporary comparison buffer.
+
+Snapshot comments attach only to the matching side and content hash; they do
+not silently rebind to a working-tree file or another snapshot. Durable paths
+remain repository-relative rather than DiffTool temporary names.
+
+==============================================================================
+7. GIT REVIEW SESSIONS                                 *review-comments-sessions*
+
+|:ReviewStart| declares an immutable base-to-worktree review scope. Example: >
+
+  :ReviewStart HEAD~1
+<
+
+The revision is resolved once through argv-safe Git invocation and stored as a
+full object ID. `HEAD~1` means that commit to the live worktree, including the
+last commit and later manual/agent edits. Starting HEAD/branch are provenance;
+they cannot silently move the stored base.
+
+Use `:ReviewStart! origin/main` to atomically archive a non-empty current
+session and create another. Invalid refs, locks, concurrent writes, and storage
+failures leave the old document, marks, and review projection intact.
+
+DIFF ADAPTER ~
+
+|:ReviewDiff| does not assume a particular diff plugin. Configure: >lua
+
+  require("review_comments").setup({
+    session = {
+      open_on_start = false,
+      open_diff = function(ctx)
+        -- ctx.root, ctx.base_commit, ctx.head_commit, ctx.scope
+        return require("my_diff_adapter").open(ctx)
+      end,
+    },
+  })
+<
+
+Or listen for the `ReviewDiffRequested` User event. With no callback,
+|:ReviewDiff| emits the event and otherwise does nothing.
+
+==============================================================================
+8. LISTS AND DIFFTOOL                                  *review-comments-difftool*
+
+LIVE QUICKFIX PROJECTION ~
+
+Adding a comment never creates, replaces, or opens quickfix. |:ReviewList| is
+the explicit opt-in that materializes a projection. Once it exists, every
+successful comment mutation and persisted anchor update refreshes that exact
+list by ID—even while a foreign list is current—without activating it.
+
+In ordinary editing the plugin pushes/reuses a quickfix history entry rather
+than replacing diagnostics or tests. |:cnext| and |:cprev| work when it is
+current. The plugin refuses operations that would truncate newer history.
+
+BUILT-IN DIFFTOOL ~
+
+Built-in DiffTool owns global quickfix. Reviews use a location list and leave
+the DiffTool list and index byte-for-byte untouched:
+
+  - |:cnext| and |:cprev| remain DiffTool file navigation.
+  - Every review location row is targetless, so `<CR>` and |:lnext| cannot
+    reopen only one side after DiffTool advances.
+  - |:ReviewJump|, |:ReviewNext|, and |:ReviewPrevious| validate the current
+    file, side, owner pane, and source identity before moving.
+  - Unavailable file/side rows remain visible and labeled.
+
+Run |:ReviewList| in the desired DiffTool pane after changing side/file. Set
+`list.difftool_fallback = false` to refuse listing during DiffTool.
+
+==============================================================================
+9. PERSISTENCE                                         *review-comments-storage*
+
+Default per-worktree layout: >
+
+  .local/review/
+    current.json
+    archive/
+    recovery/
+<
+
+The plugin normally adds `/.local/review/` to `.git/info/exclude`, never the
+repository `.gitignore`. Linked worktrees use Git's common directory.
+
+SCHEMA V3 ~
+
+The document stores:
+
+  - `schema_version = 3`, revision, session ID, timestamps, and Git scope;
+  - stable comment IDs, multiline text, active/resolved state, and timestamps;
+  - repository-relative path plus linewise/exact byte geometry;
+  - immutable original text/hash/context and separate current trusted data;
+  - source identity, Git path history, validity, staleness, and failure reason.
+
+CONCURRENCY AND RECOVERY ~
+
+Writes use an exclusive `current.json.lock`, exact-byte digest compare-and-swap,
+and temporary-file rename. Unchanged documents are not rewritten. Clean
+sessions reload external changes at command boundaries. A concurrent writer is
+never silently overwritten; conflicting valid local state is preserved as
+`recovery/conflict-*.json`. Locks are never auto-deleted.
+
+Malformed/invalid supported-schema state moves intact to
+`recovery/corrupt-*.json`. Schema v1/v2 migrates to v3 only after an exact
+pre-migration backup. Future schemas are refused and untouched. Archives use a
+UTC timestamp/session ID and the same lock/CAS discipline.
+
+==============================================================================
+10. CONFIGURATION                                       *review-comments-options*
+
+All defaults: >lua
+
+  require("review_comments").setup({
+    storage = {
+      directory = ".local/review",
+      current_file = "current.json",
+      archive_directory = "archive",
+      recovery_directory = "recovery",
+      add_to_git_exclude = true,
+    },
+    context_lines = 2,
+    relocation = {
+      enabled = true,
+      min_context_lines = 2,
+      context_score_margin = 1,
+      max_candidate_lines = 200,
+      git_renames = true,
+      file_search = true,
+      max_candidate_files = 2000,
+      max_file_bytes = 2 * 1024 * 1024,
+    },
+    clipboard = {
+      register = "+",
+      include_original_text = false,
+      include_current_text = false,
+    },
+    display = {
+      highlight = "ReviewCommentRegion",
+      sign_highlight = "ReviewCommentSign",
+      sign_text = "R",
+      resolved_highlight = "ReviewCommentResolved",
+      resolved_sign_highlight = "ReviewCommentResolvedSign",
+      resolved_sign_text = "✓",
+      candidate_highlight = "ReviewCommentCandidate",
+      candidate_sign_highlight = "ReviewCommentCandidateSign",
+      candidate_sign_text = "?",
+      orphaned_sign_highlight = "ReviewCommentOrphanedSign",
+      orphaned_sign_text = "!",
+    },
+    list = {
+      open = true,
+      height = 12,
+      difftool_fallback = "loclist",
+    },
+    editor = {
+      start_insert = true,
+      spell = false,
+      window = {},
+    },
+    session = {
+      open_on_start = false,
+      open_diff = nil,
+    },
+    notify = true,
+    repository_root = nil,
+    resolve_target = nil,
+  })
+<
+
+                                              *review-comments-storage-options*
+storage.*
+        Safe repository-relative state paths and `.git/info/exclude` behavior.
+
+                                              *review-comments-context-lines*
+context_lines
+        Immutable/current context lines retained on either side of a range.
+
+                                                 *review-comments-relocation*
+relocation.*
+        Enable recovery; set context evidence/margin and maximum changed range;
+        control Git rename and bounded repository fallback limits.
+
+                                                   *review-comments-clipboard*
+clipboard.register
+        Register written by |:ReviewCopy|. Default: "+". System registers are
+        refused when no actual clipboard provider is available.
+
+clipboard.include_original_text
+clipboard.include_current_text
+        Include code in exported blocks when useful for disambiguation.
+
+                                                     *review-comments-display*
+display.*
+        Configure healthy/resolved/candidate/orphan highlight groups/sign text.
+
+                                                        *review-comments-list*
+list.open
+list.height
+list.difftool_fallback
+        Configure list windows and DiffTool location-list fallback.
+
+                                                      *review-comments-editor-options*
+editor.start_insert
+editor.spell
+editor.window
+        Configure scratch editor mode, spelling, and floating-window overrides.
+
+                                                     *review-comments-session-options*
+session.open_on_start
+session.open_diff
+        Optionally invoke the diff adapter after |:ReviewStart|. The callback
+        receives `{ root, scope, base_commit, head_commit }`.
+
+                                                       *review-comments-notify*
+notify
+        Set false to suppress plugin notifications.
+
+                                                *review-comments-resolve-target*
+resolve_target
+        Optional callback before built-in Git/DiffTool resolution. Receives
+        `bufnr`, `buffer_path`, `cwd`, and optional `difftool`. Return nil for
+        defaults or: >lua
+
+          {
+            root = "/absolute/repository/path",
+            file = "src/generated.lua",
+            source = { kind = "worktree" },
+          }
+<
+        Snapshot sources use
+        `{ kind = "snapshot", side = "left"|"right", content_sha256 = "..." }`.
+
+                                             *review-comments-repository-root*
+repository_root
+        Optional path/callback for DiffTool temporary buffers whose location
+        cannot reveal their repository.
+
+==============================================================================
+11. LUA API AND EVENTS                                     *review-comments-api*
+
+All public functions are exported by `require("review_comments")`.
+
+setup(opts)                                        *review-comments.setup()*
+add_comment(params)                          *review-comments.add_comment()*
+edit_comment(params)                        *review-comments.edit_comment()*
+delete_comment(params)                    *review-comments.delete_comment()*
+resolve_review(params)                    *review-comments.resolve_review()*
+reopen_review(params)                      *review-comments.reopen_review()*
+relocate_comment(params)                *review-comments.relocate_comment()*
+        Lifecycle operations. `params` may include `root`, `id`, `bufnr`,
+        `line1`, `line2`, `mode`, zero-based byte `start_column` and exclusive
+        `end_column`, `text`, or `force` as appropriate. Add/edit with text are
+        synchronous; without text they return an editor handle. Mutations
+        persist a validated candidate before replacing memory.
+
+copy({opts})                                      *review-comments.copy()*
+list({opts})                                      *review-comments.list()*
+        `opts.include_resolved` controls resolved notes. copy returns text;
+        list returns "quickfix", "loclist", or nil.
+
+status([root])                                  *review-comments.status()*
+        Return `{ total, active, resolved, stale, orphaned }`.
+
+reload({opts})                                  *review-comments.reload()*
+        Reload `opts.root` or active root; `force` discards pending anchors.
+
+start_session({opts})                    *review-comments.start_session()*
+get_session([root])                        *review-comments.get_session()*
+open_diff({opts})                              *review-comments.open_diff()*
+        Create/query/use an immutable Git review scope. `start_session` accepts
+        `root`, `base_ref`, and `force`, returning session and archive path.
+
+next()                                            *review-comments.next()*
+previous()                                    *review-comments.previous()*
+jump()                                            *review-comments.jump()*
+close_list()                                *review-comments.close_list()*
+        Safely navigate/jump/close the plugin-owned projection.
+
+clear()                                          *review-comments.clear()*
+        Archive/reset and return the absolute archive path or nil.
+
+get_comments([root])                      *review-comments.get_comments()*
+        Return a deep copy. Explicit path aliases are canonicalized through Git
+        before accessing state.
+
+USER EVENTS ~
+
+  `ReviewCommentsChanged`
+        `data = { root, action, comment_id? }`
+
+  `ReviewCommentsExported`
+        `data = { root, count }`
+
+  `ReviewSessionStarted`
+        `data = { root, scope, archive_path? }`
+
+  `ReviewDiffRequested`
+        `data = { root, scope }`
+
+  `ReviewSessionCleared`
+        `data = { root, archive_path }`
+
+Use `:checkhealth review-comments` or `:checkhealth review_comments` for
+configuration, Git, clipboard, storage schema, and lock checks.
+
+==============================================================================
+12. LIMITATIONS                                       *review-comments-limitations*
+
+  - Changed-text context candidates require explicit |:ReviewRelocate|.
+  - Relocation is conservative and bounded, not fuzzy/symbol-aware refactoring.
+  - Blockwise selections are unsupported.
+  - Quickfix/location lists are read-only projections; mutate with commands.
+  - One current session exists per worktree; there is no archive browser yet.
+  - Concurrent state reloads or conflicts but is not automatically merged.
+  - Historical snapshots need the matching buffer; other diff plugins may need
+    |review-comments-resolve-target|.
+  - AI/CLI transport and process management are intentionally outside scope.
+
+vim:tw=78:ts=8:noet:ft=help:norl:

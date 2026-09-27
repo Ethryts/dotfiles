@@ -1,0 +1,36 @@
+return {
+  config = nil,
+  enabled = false,
+  -- Invalidates deferred work created by an earlier setup/enable lifecycle.
+  lifecycle_epoch = 0,
+  layouts = {},
+  rendered_buffers = {},
+  pending = {},
+  disabled_buffers = {},
+  hover = {
+    win = nil,
+    buf = nil,
+    source_win = nil,
+    source_buf = nil,
+    source_line = nil,
+    target = nil,
+    bounds = nil,
+    geometry = nil,
+    placement = nil,
+    pending_target = nil,
+    generation = 0,
+    timer = nil,
+    pinned = false,
+    closing = false,
+    -- Float buffers remain owned until BufWipeout has finished, even when
+    -- hover.buf is cleared before nvim_buf_delete() triggers the event.
+    owned_buffers = {},
+  },
+  previous_virtual_text = nil,
+  saved_virtual_text = false,
+  installed_virtual_text = nil,
+  previous_mousemoveevent = nil,
+  installed_mousemoveevent = nil,
+  mouse_listener = nil,
+  mouse_update_scheduled = false,
+}

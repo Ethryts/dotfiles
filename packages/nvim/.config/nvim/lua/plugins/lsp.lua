@@ -114,6 +114,7 @@ return {
           basedpyright = {
             disableOrganizeImports = true, -- Fixed typo (was disableOrganizedImports)
             analysis = {
+              diagnosticMode = "workspace",
               autoSearchPaths = true,
               useLibraryCodeForTypes = true,
               diagnosticSeverityOverrides = {
